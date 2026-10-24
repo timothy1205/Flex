@@ -645,15 +645,16 @@ class _StartPlanPageState extends State<StartPlanPage>
     });
   }
 
-  void _update(ExerciseSetView exerciseSet) {
+  void _update(ExerciseSetView shown) {
     final settings = context.read<Setting>();
-    if (settings.strengthUnit == 'last-entry' && !exerciseSet.cardio ||
-        settings.cardioUnit == 'last-entry' && exerciseSet.cardio)
-      _unit = exerciseSet.unit;
-    else if (exerciseSet.cardio)
+    if (settings.strengthUnit == 'last-entry' && !shown.cardio ||
+        settings.cardioUnit == 'last-entry' && shown.cardio)
+      _unit = shown.unit;
+    else if (shown.cardio)
       _unit = settings.cardioUnit;
     else
       _unit = settings.strengthUnit;
+    final exerciseSet = convertExerciseSetUnit(shown, _unit);
 
     _reps.text = toString(exerciseSet.reps);
     _weight.text = toString(exerciseSet.weight);
@@ -762,6 +763,8 @@ class _StartPlanPageState extends State<StartPlanPage>
           count == (max ?? settings.maxSets) &&
           _selected < exercises.length - 1;
 
+      if (!_cardio && entry.exercise.displayUnit != _unit)
+        await setExerciseDisplayUnit(db, exerciseId: exerciseId, unit: _unit);
       final exerciseSet = await insertExerciseSet(
         db,
         exerciseSet: draft,
@@ -819,7 +822,10 @@ class _StartPlanPageState extends State<StartPlanPage>
         _update(defaults);
       } else {
         _clear();
-        _unit = exercise.displayUnit;
+        final unit = context.read<Setting>().strengthUnit;
+        _unit = exercise.kind != 'cardio' && unit != 'last-entry'
+            ? unit
+            : exercise.displayUnit;
       }
     }
 

@@ -978,6 +978,193 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('StartPlanPage keeps the strength unit setting across saves', (
+    WidgetTester tester,
+  ) async {
+    const exercise = 'Barbell bench press';
+    final harness = await FlexTestHarness.create();
+    final database = harness.database;
+
+    final id = await database.plans.insertOne(planFixture());
+    final plan =
+        await (database.plans.select()..where((plan) => plan.id.equals(id)))
+            .getSingle();
+    await insertPlanExerciseFixture(
+      database,
+      planId: plan.id,
+      exercise: exercise,
+    );
+    await database.settings.update().write(
+      testSettings(
+        explainedPermissions: true,
+        notificationPermissionRequested: true,
+      ),
+    );
+    await database.settings.update().write(
+      const SettingsCompanion(strengthUnit: Value('lb')),
+    );
+    await harness.pump(tester, StartPlanPage(plan: plan));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(textFieldWithLabel('Reps'), '5');
+    await tester.enterText(textFieldWithLabel('Weight (lb)'), '100');
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+    expect(find.text('100'), findsOne);
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+
+    final stored = await database.exerciseSets.select().get();
+    expect(stored, hasLength(2));
+    for (final set in stored) {
+      expect(set.loadKg, closeTo(45.359237, 0.0001));
+    }
+    final saved = await getLatestExerciseSet(database, exerciseName: exercise);
+    expect(saved!.unit, 'lb');
+    expect(saved.weight, closeTo(100, 0.0001));
+  });
+
+  Future<void> pumpUnitPlan(
+    WidgetTester tester,
+    FlexTestHarness harness, {
+    required String exercise,
+    required SettingsCompanion units,
+    bool cardio = false,
+    String unit = 'kg',
+  }) async {
+    final database = harness.database;
+    final id = await database.plans.insertOne(planFixture());
+    final plan =
+        await (database.plans.select()..where((plan) => plan.id.equals(id)))
+            .getSingle();
+    await insertPlanExerciseFixture(
+      database,
+      planId: plan.id,
+      exercise: exercise,
+      cardio: cardio,
+      unit: unit,
+    );
+    await database.settings.update().write(
+      testSettings(
+        explainedPermissions: true,
+        notificationPermissionRequested: true,
+      ),
+    );
+    await database.settings.update().write(units);
+    await harness.pump(tester, StartPlanPage(plan: plan));
+    await tester.pumpAndSettle();
+  }
+
+  testWidgets('StartPlanPage converts past kg sets to the strength unit', (
+    WidgetTester tester,
+  ) async {
+    const exercise = 'Barbell bench press';
+    final harness = await FlexTestHarness.create();
+    await insertExerciseSetFixture(
+      harness.database,
+      exercise,
+      weight: 45.359237,
+      created: DateTime.now().subtract(const Duration(days: 2)),
+    );
+    await pumpUnitPlan(
+      tester,
+      harness,
+      exercise: exercise,
+      units: const SettingsCompanion(strengthUnit: Value('lb')),
+    );
+
+    expect(find.text('100'), findsOne);
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+
+    final stored =
+        await (harness.database.exerciseSets.select()
+              ..orderBy([(set) => OrderingTerm.desc(set.id)])
+              ..limit(1))
+            .getSingle();
+    expect(stored.loadKg, closeTo(45.359237, 0.0001));
+  });
+
+  testWidgets('StartPlanPage keeps last-entry units unchanged', (
+    WidgetTester tester,
+  ) async {
+    const exercise = 'Barbell bench press';
+    final harness = await FlexTestHarness.create();
+    await insertExerciseSetFixture(
+      harness.database,
+      exercise,
+      created: DateTime.now().subtract(const Duration(days: 2)),
+    );
+    await pumpUnitPlan(
+      tester,
+      harness,
+      exercise: exercise,
+      units: const SettingsCompanion(strengthUnit: Value('last-entry')),
+    );
+
+    expect(textFieldWithLabel('Weight (kg)'), findsOne);
+    expect(find.text('50'), findsOne);
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+
+    final saved = await getLatestExerciseSet(
+      harness.database,
+      exerciseName: exercise,
+    );
+    expect(saved!.unit, 'kg');
+    expect(saved.weight, 50);
+  });
+
+  testWidgets('StartPlanPage keeps weighted cardio in its own unit', (
+    WidgetTester tester,
+  ) async {
+    final harness = await FlexTestHarness.create();
+    await pumpUnitPlan(
+      tester,
+      harness,
+      exercise: 'Sled push',
+      cardio: true,
+      units: const SettingsCompanion(
+        strengthUnit: Value('lb'),
+        cardioUnit: Value('km'),
+      ),
+    );
+
+    expect(textFieldWithLabel('Weight (kg)'), findsOne);
+  });
+
+  testWidgets('StartPlanPage keeps weighted cardio display unit on save', (
+    WidgetTester tester,
+  ) async {
+    const exercise = 'Sled push';
+    final harness = await FlexTestHarness.create();
+    await insertExerciseSetFixture(
+      harness.database,
+      exercise,
+      cardio: true,
+      created: DateTime.now().subtract(const Duration(days: 2)),
+    );
+    await pumpUnitPlan(
+      tester,
+      harness,
+      exercise: exercise,
+      cardio: true,
+      units: const SettingsCompanion(
+        strengthUnit: Value('lb'),
+        cardioUnit: Value('km'),
+      ),
+    );
+
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+
+    final definition =
+        await (harness.database.exercises.select()
+              ..where((row) => row.name.equals(exercise)))
+            .getSingle();
+    expect(definition.displayUnit, 'kg');
+  });
+
   testWidgets('StartPlanPage saves', (WidgetTester tester) async {
     final harness = await FlexTestHarness.create();
     final database = harness.database;

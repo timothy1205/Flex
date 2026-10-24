@@ -384,9 +384,9 @@ class _HistoryPageWidgetState extends State<_HistoryPageWidget> {
     );
 
     if (settings.strengthUnit != 'last-entry' && !exerciseSet.cardio) {
-      exerciseSet = exerciseSet.copyWith(unit: settings.strengthUnit);
+      exerciseSet = convertExerciseSetUnit(exerciseSet, settings.strengthUnit);
     } else if (settings.cardioUnit != 'last-entry' && exerciseSet.cardio) {
-      exerciseSet = exerciseSet.copyWith(unit: settings.cardioUnit);
+      exerciseSet = convertExerciseSetUnit(exerciseSet, settings.cardioUnit);
     }
 
     if (lastWeight != null) {

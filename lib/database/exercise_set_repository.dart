@@ -42,6 +42,35 @@ double? distanceMetres(String unit, double value) {
   };
 }
 
+/// Shows a set's load and distance in [unit].
+ExerciseSetView convertExerciseSetUnit(ExerciseSetView set, String unit) {
+  if (set.unit == unit) return set;
+  final weightKg = loadKg(set.unit, set.weight);
+  final metres = distanceMetres(set.unit, set.distance);
+  final isWeightUnit = loadKg(unit, 0) != null;
+  final isDistanceUnit = distanceMetres(unit, 0) != null;
+  return set.copyWith(
+    unit: unit,
+    weight: weightKg != null && isWeightUnit
+        ? displayLoad(unit, weightKg)
+        : null,
+    distance: metres != null && isDistanceUnit
+        ? displayDistance(unit, metres)
+        : null,
+  );
+}
+
+/// Sets the unit used to show one exercise's sets.
+Future<void> setExerciseDisplayUnit(
+  AppDatabase database, {
+  required int exerciseId,
+  required String unit,
+}) {
+  return (database.exercises.update()
+        ..where((exercise) => exercise.id.equals(exerciseId)))
+      .write(ExercisesCompanion(displayUnit: Value(unit)));
+}
+
 ExerciseSetView _toExerciseSetView(AppDatabase database, TypedResult row) {
   final set = row.readTable(database.exerciseSets);
   final exercise = row.readTable(database.exercises);

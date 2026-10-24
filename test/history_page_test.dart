@@ -1,3 +1,5 @@
+import 'package:flex/database/database.dart';
+import 'package:flex/sets/edit_set_page.dart';
 import 'package:flex/sets/history_page.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
@@ -242,6 +244,37 @@ void main() {
     expect(find.textContaining('Weight (kg)'), findsOne);
     expect(find.textContaining('Reps'), findsOne);
     expect(find.textContaining('Name'), findsOne);
+  });
+
+  testWidgets('HistoryPage add converts the last set to the strength unit', (
+    WidgetTester tester,
+  ) async {
+    final harness = await FlexTestHarness.create();
+    await insertExerciseSetFixture(
+      harness.database,
+      'Bench press',
+      weight: 45.359237,
+    );
+    await harness.database.settings.update().write(
+      const SettingsCompanion(strengthUnit: Value('lb')),
+    );
+
+    await pumpHistoryPage(tester, harness);
+    await tester.tap(find.text('Add'));
+    for (
+      var i = 0;
+      i < 100 && find.byType(EditSetPage).evaluate().isEmpty;
+      i++
+    ) {
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 10)),
+      );
+      await tester.pump();
+    }
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('Weight (lb)'), findsOne);
+    expect(find.text('100'), findsOne);
   });
 
   testWidgets('HistoryPage settings', (WidgetTester tester) async {
